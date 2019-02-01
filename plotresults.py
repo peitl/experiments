@@ -7,6 +7,7 @@ Created on Thu Feb  2 10:52:13 2017
 """
 
 import sys
+import math
 from argparse import ArgumentParser
 from operator import itemgetter
 from statistics import pvariance, pstdev, mean
@@ -151,16 +152,130 @@ def readData(filename):
     classes.sort()
     configurations.sort()
     return header, cols
+
+def getEasy(classes, configurations, instances, rundata, but=0, threshold=60):
+    """
+    Returns a list of instances that were solved by at least all but 'but' solvers in uder 'threshold' seconds.
+    """
+    easy = []
+    for classname in classes:
+        for instance in instances[classname]:
+            if sum((ans != None and t <= threshold for (ans, t) in (rundata[getUID(config, classname, instance)] for config in configurations))) + but >= len(configurations):
+                easy.append(classname + "/" + instance)
+    return easy
+
+def getUID(config, classname, instance):
+    return config + ":" + classname + "/" + instance
+
+def init(filename, aggregate):
+    """
+    This function parses the data and creates the following data structures:
+
+        # the list of benchmark classes, a.k.a. families
+        classes = list(class:string)
+
+        # the list of solvers/configurations
+        configurations = list(config:string)
+
+        # for every class a list of its instances
+        instances = dict(class:string, list(instance:string))
+
+        # for every instance and configuration identified as a tuple ('class/instance', 'config') the rundata
+        rundata = dict{class/instance:string, config:string}{answer:enum(True, False, None), time:float)}
+
+    It also guesses the timeout used as int(min(time)) over timed-out instances.
+    If all instances are solved, the timeout is set to int(max(time)) + 1.
+    """
+    header = None
+    name_idx = -1
+    time_idx = -1
+    ans_idx = -1
+    ans_dict = {"10" : True, "20" : False}
+    status_idx = -1
+    class_idx = -1
+    config_idx = -1
+
+    classes = set()
+    configurations = set()
+    instances = defaultdict(list)
+    rundata = {}
+    timeout = math.inf
+
+    with open(filename, "r") as f:
+        header = {col : idx for idx, col in enumerate(next(f).rstrip('\n').split(","))}
+        name_idx = header["Name"]
+        time_idx = header["Time"]
+        ans_idx = header["Result"]
+        status_idx = header["Status"]
+        class_idx = header["Class"]
+        configuration_idx = header["Configuration"]
+
+        line_number = 1
+        for line in f:
+            line_number += 1
+            linedata = line.rstrip('\n').split(",")
+            instance = linedata[name_idx]
+            time = float(linedata[time_idx])
+            answer = ans_dict.get(linedata[ans_idx])
+            status = linedata[status_idx]
+            classname = linedata[class_idx]
+            config = linedata[config_idx]
+
+            classid = "__ALL__" if aggregate else classname
+            classes.add(classid)
+            configurations.add(config)
+
+            if status == "time" and time < timeout:
+                timeout = time
+            
+            instances[classid].append(instance)
+            uid = getUID(config, classname, instance)
+            if uid in rundata:
+                print("Error on line %d: duplicate entry for config %s on instance %s of class %s" % (line_number, config, instance, classname))
+                sys.exit(2)
+            rundata[uid] = (answer, time)
+    
+    timeout = int(timeout)
+    classes = sorted(classes)
+    configurations = sorted(configurations)
+
+    return classes, configurations, instances, rundata, timeout
+
+def verify(classes, configurations, instances, rundata):
+    """
+    This function checks the following properties:
+        
+        All answers provided for a single class/instance are the same
+
+    """
+    
+    success = True
+
+    for classname in classes:
+        for instance in instances[classname]:
+            votes = [[],[]]
+            for config in configurations:
+                ans = rundata[getUID(config, classname, instance)][0]
+                if ans != None:
+                    votes[ans].append(config)
+            if len(votes[False]) * len(votes[True]) > 0:
+                success = False
+                print("Disagreement on instance '%s' of class '%s'" % (instance, classname))
+                print("The following solvers/configs say False: " + ", ".join(votes[False]))
+                print("The following solvers/configs say True:  " + ", ".join(votes[True]))
+
+    return success
     
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("filename", nargs='?', help="The csv file with the results as parsed by parseresults.py.")
     parser.add_argument("-c", "--cactus", action="store_true", default=False, help="Make a cactus plot of the various configurations and classes.")
-    parser.add_argument("-x", "--scatter", action="store_true", default=False, help="Make a scatter plot that compares 2 configurations.")
-    parser.add_argument("-s", "--stats", action="store_true", default=False, help="Display statistics about the results.")
-    parser.add_argument("-t", "--timeout", type=int, default=600, help="Specify the cutoff time that was used for these runs.")
+    parser.add_argument("-g", "--aggregate", action="store_true", default=False, help="Treat all classes as one.")
     parser.add_argument("-f", "--families", action="store_true", default=False, help="Find families with large differences between solvers.")
     parser.add_argument("-o", "--outliers", action="store_true", default=False, help="Find instances with large differences between solvers.")
+    parser.add_argument("-s", "--stats", action="store_true", default=False, help="Display statistics about the results.")
+    parser.add_argument("-t", "--timeout", type=int, default=600, help="Specify the cutoff time that was used for these runs.")
+    parser.add_argument("-x", "--scatter", action="store_true", default=False, help="Make a scatter plot that compares 2 configurations.")
     args = parser.parse_args()
     
     if args.filename == None:
@@ -169,6 +284,12 @@ if __name__ == "__main__":
     TIMEOUT = args.timeout
         
     header, cols = readData(args.filename)
+    classes, configurations, instances, rundata, timeout = init(args.filename, args.aggregate)
+    print("Guessed timeout: %d" % timeout)
+    if verify(classes, configurations, instances, rundata):
+        print("Solvers agree")
+    threshold = 1
+    print("Number of instances solved by all solvers in under %d seconds: %d" % (threshold, len(getEasy(classes, configurations, instances, rundata, threshold=threshold))))
     
     if args.stats:
         printStats(header, cols)
