@@ -274,19 +274,19 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--families", action="store_true", default=False, help="Find families with large differences between solvers.")
     parser.add_argument("-o", "--outliers", action="store_true", default=False, help="Find instances with large differences between solvers.")
     parser.add_argument("-s", "--stats", action="store_true", default=False, help="Display statistics about the results.")
-    parser.add_argument("-t", "--timeout", type=int, default=600, help="Specify the cutoff time that was used for these runs.")
+    parser.add_argument("-t", "--timeout", type=int, default=0, help="Specify the cutoff time that was used for these runs.")
     parser.add_argument("-v", "--venn", action="store_true", default=False, help="Compute the Venn diagram of solved instances for the configurations.")
     parser.add_argument("-x", "--scatter", action="store_true", default=False, help="Make a scatter plot that compares 2 configurations.")
     args = parser.parse_args()
     
     if args.filename == None:
         args.filename = "results_merged.csv"
-
-    TIMEOUT = args.timeout
         
-    header, cols = readData(args.filename)
     classes, configurations, instances, rundata, timeout = init(args.filename, args.aggregate)
-    print("Guessed timeout: %d" % timeout)
+    if args.timeout > 0:
+        timeout = args.timeout
+    else:
+        print("Guessed timeout: %d" % timeout)
     if verify(classes, configurations, instances, rundata):
         print("Solvers agree ✓")
     
