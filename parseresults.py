@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Spyder Editor
-
-@author: tp
-"""
 
 import re, os, sys
-from multiprocessing import Pool
+import multiprocessing
 
 patterns = [r"[^\s/]*$", r"([^\s]*) [^\s]*$", r"([^\s]*) [^\s]*$", r"[^\s]*$", r"[^\s]*$"]
 regex = [re.compile(pattern) for pattern in patterns]
@@ -131,9 +126,9 @@ if __name__ == '__main__':
         sys.exit(1)
     in_dir = sys.argv[1]
     out_file = sys.argv[2]
-    num_proc = 4
+    num_proc = multiprocessing.cpu_count()
     def f(x):
         return walkResults(in_dir, out_file, remainder=x, modulus=num_proc)
-    with Pool(num_proc) as p:
+    with multiprocessing.Pool(num_proc) as p:
         result_table = [elem for table in p.map(f, range(num_proc)) for elem in table]
         writeCSV(out_file, result_table)
