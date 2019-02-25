@@ -7,6 +7,7 @@ Spyder Editor
 """
 
 import re, os, sys
+from multiprocessing import Pool
 
 patterns = [r"[^\s/]*$", r"([^\s]*) [^\s]*$", r"([^\s]*) [^\s]*$", r"[^\s]*$", r"[^\s]*$"]
 regex = [re.compile(pattern) for pattern in patterns]
@@ -43,8 +44,7 @@ def getValuesFromLogAndOutFile(filename):
     
     global regex, group, log_identifiers
     values = ["Name", "Time", "Space", "Result", "Status"] + ["NA"] * (len(out_identifiers) + len(err_identifiers))
-    basename = filename[filename.rfind("/")+1:-4]
-    values[0] = basename
+    values[0] = filename[filename.rfind("/")+1:-4]
     
     with open(filename) as f:
         for s in f:
@@ -57,9 +57,8 @@ def getValuesFromLogAndOutFile(filename):
     
     if values[4] == "ok" and values[3] not in ["10","20"]:
         values[4] = "time"
-    filename = list(filename)
-    filename[-3:] = ['o', 'u', 't']
-    filename = "".join(filename)
+
+    filename = filename[:-3] + "out"
     if os.path.isfile(filename):
         with open(filename) as f:
             for s in f:
@@ -68,9 +67,7 @@ def getValuesFromLogAndOutFile(filename):
                         values[len(log_identifiers)+i] = s[len(v):].strip()
                         break
     
-    filename = list(filename)
-    filename[-3:] = ['e', 'r', 'r']
-    filename = "".join(filename)
+    filename = filename[:-3] + "err"
     if os.path.isfile(filename):
         with open(filename) as f:
             for s in f:
@@ -83,7 +80,7 @@ def getValuesFromLogAndOutFile(filename):
 root_filter_pattern = r"[^/]*$"
 root_filter_regex = re.compile(root_filter_pattern)
 
-def walkResults(in_dir="results", out_file="results_processed.csv"):
+def walkResults(in_dir="results", out_file="results_processed.csv", remainder=0, modulus=1):
     """
     The experiment setup assumes we will run different configurations (solvers)
     on benchmark sets divided into classes.
@@ -104,6 +101,7 @@ def walkResults(in_dir="results", out_file="results_processed.csv"):
         configuration = in_dir[idx+1:]
     
     result_table = []
+    i = 0
     for root, dirs, files in os.walk(in_dir):
         dirs[:] = [d for d in dirs if d[0] != "."]
         classname = root_filter_regex.search(root).group(0)
@@ -113,16 +111,14 @@ def walkResults(in_dir="results", out_file="results_processed.csv"):
             classname = "_ALL_"
         for f in files:
             if f.endswith(".log"):
-                result_table.append(getValuesFromLogAndOutFile(os.path.join(root, f)))
-                result_table[-1].append(classname)
-                result_table[-1].append(configuration)
+                if i % modulus == remainder:
+                    result_table.append(getValuesFromLogAndOutFile(os.path.join(root, f)))
+                    result_table[-1].append(classname)
+                    result_table[-1].append(configuration)
+                i += 1
+    return result_table
 
-    # sort results by time, ascending
-    #
-    # EDIT: no sorting anymore, because unsorted results may also be useful.
-    # Either uncomment and parse that way to sort, or sort in R directly.
-    #
-    #result_table.sort(key=lambda entry: (float(entry[1]), float(entry[2])))
+def writeCSV(out_file, result_table):
     with open(out_file, "w") as f:
         print(",".join(header), file=f)
         for entry in result_table:
@@ -130,4 +126,14 @@ def walkResults(in_dir="results", out_file="results_processed.csv"):
     return None
             
 if __name__ == '__main__':
-    walkResults(sys.argv[1], sys.argv[2])
+    if len(sys.argv) < 3:
+        print("USAGE: parseresults.py <in_dir> <out_file>")
+        sys.exit(1)
+    in_dir = sys.argv[1]
+    out_file = sys.argv[2]
+    num_proc = 4
+    def f(x):
+        return walkResults(in_dir, out_file, remainder=x, modulus=num_proc)
+    with Pool(num_proc) as p:
+        result_table = [elem for table in p.map(f, range(num_proc)) for elem in table]
+        writeCSV(out_file, result_table)
