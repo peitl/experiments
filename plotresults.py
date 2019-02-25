@@ -26,9 +26,6 @@ def printStats(classes, configurations, instances, rundata, timeout):
         for classname in classes:
             for instance in instances[classname]:
                 status = rundata[getUID(config, classname, instance)][2]
-                if status not in stats:
-                    print("Invalid type of Status on line %d: %s" %(i+2, status))
-                    sys.exit(1)
                 stats[status] += 1
                 total += 1
                 if status == "ok":
