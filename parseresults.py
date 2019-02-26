@@ -43,8 +43,10 @@ def getValuesFromLogAndOutFile(filename):
     
     with open(filename) as f:
         for s in f:
-            for i,v in enumerate(log_identifiers):
-                if i > 0 and v in s:
+            if "sample:" in s:
+                continue
+            for i in range(1, len(log_identifiers)):
+                if log_identifiers[i] in s:
                     match = regex[i].search(s)
                     if match:
                         values[i] = match.group(group[i])
