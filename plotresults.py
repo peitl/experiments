@@ -292,7 +292,7 @@ if __name__ == "__main__":
     elif args.families:
         analyzeFamilies(classes, configurations, instances, rundata)
     elif args.outliers:
-        findOutliers(classes, coonfigurations, instances, rundata)
+        findOutliers(classes, configurations, instances, rundata)
     elif args.venn:
         venn(classes, configurations, instances, rundata)
     elif args.easy > 0:
