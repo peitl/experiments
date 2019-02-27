@@ -90,10 +90,14 @@ def findOutliers(classes, configurations, instances, rundata):
     for classname in classes:
         for instance in instances[classname]:
             runtime_list = [rundata[getUID(config, classname, instance)][1] for config in configurations]
-            outliers.append((instance, pstdev(runtime_list)))
+            outliers.append((instance, pstdev(runtime_list), *runtime_list))
     outliers.sort(key=itemgetter(1), reverse=True)
-    for x in outliers[:20]:
-        print(("%s" + " %.02f" * len(instance_data[x[0]])) % (x[0], *instance_data[x[0]]))
+    longest_name = max((len(x[0]) for x in outliers))
+    format_string = "%{}s ".format(longest_name) + "%6.2f " + " ".join(("%{}.2f".format(len(config)) for config in configurations))
+    format_string_header = "%{}s ".format(longest_name) + "%s " + "%s " * len(configurations)
+    print(format_string_header % (("name", "stddev") + tuple(configurations)))
+    for x in outliers:
+        print(format_string % tuple(x))
 
 def scatterPlot(classes, configurations, instances, rundata):
     assert(len(configurations) == 2)
