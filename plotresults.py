@@ -201,6 +201,9 @@ def init(filename, aggregate):
             # for logscale
             time = max(time, 0.001)
 
+            if answer == None or status != "ok":
+                time = timeout
+
             instances[classname].add(instance)
             uid = getUID(config, classname, instance)
             if uid in rundata:
