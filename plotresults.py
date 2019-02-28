@@ -125,7 +125,7 @@ def getEasy(classes, configurations, instances, rundata, but=0, threshold=10):
     easy = []
     for classname in classes:
         for instance in instances[classname]:
-            if sum((ans != None and t <= threshold for (ans, t) in (rundata[getUID(config, classname, instance)] for config in configurations))) + but >= len(configurations):
+            if sum((ans != None and t <= threshold for (ans, t, *_) in (rundata[getUID(config, classname, instance)] for config in configurations))) + but >= len(configurations):
                 # create a regex pattern for grep filtering
                 #easy.append(instance + ",.*," + classname + ",")
                 easy.append(classname + "/" + instance)
