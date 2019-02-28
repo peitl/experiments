@@ -131,6 +131,54 @@ def getEasy(classes, configurations, instances, rundata, but=0, threshold=10):
                 easy.append(classname + "/" + instance)
     return easy
 
+def bestTimeout(classes, configurations, instances, rundata, timeout):
+    """
+    Assumes len(configurations) == 2.
+    Finds integers t_0, t_1 >= 1, such that the comparison of
+    the two configurations is most favourable for config_0 if
+    the time limit is t_0, and most favourable for config_1
+    if the time limit is t_1.
+    """
+
+    if len(configurations) != 2:
+        print("bestTimeout: Number of configurations must be 2, found %d" % len(configurations))
+        print(" ".join(configurations))
+        sys.exit(1)
+
+    best_t = [0, 0]
+    solved_in_time = [[0 for j in range(timeout + 1)] for i in range(2)]
+
+    for classname in classes:
+        for instance in instances[classname]:
+            for i, config in enumerate(configurations):
+                ans, t, *_ = rundata[getUID(config, classname, instance)]
+                if ans != None:
+                    solved_in_time[i][int(t) + 1] += 1
+    
+    for i in range(2):
+        for j in range(1, timeout + 1):
+            solved_in_time[i][j] += solved_in_time[i][j-1]
+
+    max_rel_diff = [-math.inf, -math.inf]
+    differences = [[0 for j in range(timeout + 1)] for i in range(2)]
+    
+    for j in range(timeout + 1):
+        d = solved_in_time[0][j] - solved_in_time[1][j]
+        for i in range(2):
+            differences[i][j] = 100 * ((-1) ** i) * d / (solved_in_time[1-i][j] + 1)
+            if differences[i][j] > max_rel_diff[i]:
+                max_rel_diff[i] = differences[i][j]
+                best_t[i] = j
+
+    print("%d %d" % tuple(best_t))
+    for i in range(2):
+        mp.plot(range(1, timeout+1), differences[i][1:], label=configurations[i])
+    mp.legend(loc=0, borderaxespad=0.5)
+    mp.axis([0, timeout + 1, min((min(differences[i]) for i in range(2))), max(max_rel_diff) + 1])
+    mp.show()
+
+
+
 def getUID(config, classname, instance):
     return config + ":" + classname + "/" + instance
 
@@ -203,7 +251,6 @@ def init(filename, aggregate):
 
             if answer == None or status != "ok":
                 time = timeout
-
             instances[classname].add(instance)
             uid = getUID(config, classname, instance)
             if uid in rundata:
@@ -272,6 +319,7 @@ def venn(classes, configurations, instances, rundata):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("filename", nargs='?', help="The csv file with the results as parsed by parseresults.py.")
+    parser.add_argument("-b", "--best-timeout", action="store_true", default=False, help="Search for the optimal time limit to differentiate between 2 configs.")
     parser.add_argument("-c", "--cactus", action="store_true", default=False, help="Make a cactus plot of the various configurations and classes.")
     parser.add_argument("-e", "--easy", type=int, default=0, help="Identify instances solved by all solvers within the given time limit.")
     parser.add_argument("-g", "--aggregate", action="store_true", default=False, help="Treat all classes as one.")
@@ -311,4 +359,6 @@ if __name__ == "__main__":
             cactusPlot(classes, configurations, instances, rundata, timeout)
         elif args.scatter:
             scatterPlot(classes, configurations, instances, rundata)
+        elif args.best_timeout:
+            bestTimeout(classes, configurations, instances, rundata, timeout)
 
