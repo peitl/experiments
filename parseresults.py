@@ -77,7 +77,7 @@ def getValuesFromLogAndOutFile(filename):
 root_filter_pattern = r"[^/]*$"
 root_filter_regex = re.compile(root_filter_pattern)
 
-def walkResults(in_dir="results", out_file="results_processed.csv", remainder=0, modulus=1):
+def getFileList(in_dir="results"):
     """
     The experiment setup assumes we will run different configurations (solvers)
     on benchmark sets divided into classes.
@@ -92,13 +92,8 @@ def walkResults(in_dir="results", out_file="results_processed.csv", remainder=0,
     benchmark set does not have classes, simply put all instances directly to 'in_dir'
     and the classname '_ALL_' will be assigned to all instances.
     """
-    configuration = in_dir[-3:]
-    idx = in_dir.rfind("_")
-    if idx != -1:
-        configuration = in_dir[idx+1:]
-    
-    result_table = []
-    i = 0
+
+    file_list = []
     for root, dirs, files in os.walk(in_dir):
         dirs[:] = [d for d in dirs if d[0] != "."]
         classname = root_filter_regex.search(root).group(0)
@@ -108,11 +103,16 @@ def walkResults(in_dir="results", out_file="results_processed.csv", remainder=0,
             classname = "_ALL_"
         for f in files:
             if f.endswith(".log"):
-                if i % modulus == remainder:
-                    result_table.append(getValuesFromLogAndOutFile(os.path.join(root, f)))
-                    result_table[-1].append(classname)
-                    result_table[-1].append(configuration)
-                i += 1
+                file_list.append((root, classname, f))
+    return file_list
+
+def getResultsFromFileList(file_list):
+    config = in_dir[-3:]
+    idx = in_dir.rfind("_")
+    if idx != -1:
+        config = in_dir[idx+1:]
+    
+    result_table = [getValuesFromLogAndOutFile(os.path.join(root, logfile)) + [classname, config] for root, classname, logfile in file_list]
     return result_table
 
 def writeCSV(out_file, result_table):
@@ -129,8 +129,9 @@ if __name__ == '__main__':
     in_dir = sys.argv[1]
     out_file = sys.argv[2]
     num_proc = multiprocessing.cpu_count()
-    def f(x):
-        return walkResults(in_dir, out_file, remainder=x, modulus=num_proc)
+
+    file_list = getFileList(in_dir)
+    sliced_file_lists = [file_list[r::num_proc] for r in range(num_proc)]
+
     with multiprocessing.Pool(num_proc) as p:
-        result_table = [elem for table in p.map(f, range(num_proc)) for elem in table]
-        writeCSV(out_file, result_table)
+        writeCSV(out_file, [elem for table in p.map(getResultsFromFileList, sliced_file_lists) for elem in table])
