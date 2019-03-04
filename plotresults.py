@@ -75,14 +75,19 @@ def analyzeFamilies(classes, configurations, instances, rundata):
         else:
             std = pstdev(solved, mu)
             relstd = std / mu
-            family_data.append([classname] + solved + [std, relstd])
-    family_data.sort(key=lambda x: x[-2] + x[-1], reverse=True)
+            relvar = pvariance(solved, mu) / mu
+            #family_data.append([classname, std, relstd] + solved)
+            family_data.append([classname, relvar] + solved)
+    family_data.sort(key=lambda x: x[1], reverse=True)
     longest_name = max((len(family[0]) for family in family_data))
-    format_string = "%{}s ".format(longest_name) + "%5d " * len(configurations) + "%7.2f %7.2f"
+    #format_string = "%{}s ".format(longest_name) + "%{}.2f ".format(len("stddev")) + "%{}.2f ".format(len("reldev")) + " ".join(("%{}d".format(len(config)) for config in configurations))
+    format_string = "%{}s ".format(longest_name) + "%{}.2f ".format(len("relvar")) + " ".join(("%{}d".format(len(config)) for config in configurations))
+    format_string_header = "%{}s ".format(longest_name) + "%s " + "%s " * len(configurations)
     print()
     print("Families with the highest discrepancies:")
     print()
-    for family in family_data[:20]:
+    print(format_string_header % (("family", "relvar") + tuple(configurations)))
+    for family in family_data:
         print(format_string % tuple(family))
 
 def findOutliers(classes, configurations, instances, rundata):
@@ -93,7 +98,7 @@ def findOutliers(classes, configurations, instances, rundata):
             outliers.append((instance, pstdev(runtime_list), *runtime_list))
     outliers.sort(key=itemgetter(1), reverse=True)
     longest_name = max((len(x[0]) for x in outliers))
-    format_string = "%{}s ".format(longest_name) + "%6.2f " + " ".join(("%{}.2f".format(len(config)) for config in configurations))
+    format_string = "%{}s ".format(longest_name) + "%{}.2f ".format(len("stddev")) + " ".join(("%{}.2f".format(len(config)) for config in configurations))
     format_string_header = "%{}s ".format(longest_name) + "%s " + "%s " * len(configurations)
     print(format_string_header % (("name", "stddev") + tuple(configurations)))
     for x in outliers:
