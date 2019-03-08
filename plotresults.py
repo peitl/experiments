@@ -17,26 +17,29 @@ colors = ["r", "g", "b", "y"] * 90
 styles = ["-", "--", ":"] * 120
 
 def printStats(classes, configurations, instances, rundata, timeout):
-    stats = {"ok": 0, "time": 0, "memory": 0, "fault": 0, "signal(9)": 0}
+    stats = {True: 0, False: 0, "time": 0, "memory": 0, "fault": 0, "signal(9)": 0}
     par10 = 0
     for j, config in enumerate(configurations):
         par10 = 0
         total = 0
-        stats["ok"] = stats["time"] = stats["memory"] = stats["fault"] = stats["signal(9)"] = 0
+        stats[True] = stats[False] = stats["time"] = stats["memory"] = stats["fault"] = stats["signal(9)"] = 0
         for classname in classes:
             for instance in instances[classname]:
-                status = rundata[getUID(config, classname, instance)][2]
-                stats[status] += 1
                 total += 1
-                if status == "ok":
-                    par10 += float(rundata[getUID(config, classname, instance)][1])
+                ans, time, status = rundata[getUID(config, classname, instance)]
+                if ans != None:
+                    stats[ans] += 1
+                    par10 += time
                 else:
                     par10 += timeout*10
+                    stats[status] += 1
         print("####################" + "#" * 15 + "##")
         print("# Configuration:    %15s #" % config)
         print("####################" + "#" * 15 + "##")
         print("# Total instances:  %15d #" % total)
-        print("# Instances solved: %15d #" % stats["ok"])
+        print("# Instances solved: %15d #" % (stats[True] + stats[False]))
+        print("# SAT:              %15d #" % stats[True])
+        print("# UNSAT:            %15d #" % stats[False])
         print("# Timeouts:         %15d #" % stats["time"])
         print("# Memory outs:      %15d #" % stats["memory"])
         print("# Faults:           %15d #" % stats["fault"])
@@ -104,7 +107,7 @@ def findOutliers(classes, configurations, instances, rundata):
     for x in outliers:
         print(format_string % tuple(x))
 
-def scatterPlot(classes, configurations, instances, rundata):
+def scatterPlot(classes, configurations, instances, rundata, timeout):
     assert(len(configurations) == 2)
     instance_times = [[], []]
     for classname in classes:
@@ -112,7 +115,7 @@ def scatterPlot(classes, configurations, instances, rundata):
             for i, config in enumerate(configurations):
                 instance_times[i].append(rundata[getUID(config, classname, instance)][1])
     mp.scatter(*instance_times)
-    mp.plot([0,TIMEOUT*10], [0,TIMEOUT*10])
+    mp.plot([0, timeout*10], [0, timeout*10])
     l, u = min(min(instance_times)) / 5, max(max(instance_times)) * 5
     mp.xlim(l, u)
     mp.ylim(l, u)
@@ -363,7 +366,7 @@ if __name__ == "__main__":
         if args.cactus:
             cactusPlot(classes, configurations, instances, rundata, timeout)
         elif args.scatter:
-            scatterPlot(classes, configurations, instances, rundata)
+            scatterPlot(classes, configurations, instances, rundata, timeout)
         elif args.best_timeout:
             bestTimeout(classes, configurations, instances, rundata, timeout)
 
