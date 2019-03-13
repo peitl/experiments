@@ -3,6 +3,8 @@
 
 import re, os, sys
 import multiprocessing
+from argparse import ArgumentParser
+from operator import itemgetter
 
 patterns = [r"[^\s/]*$", r"([^\s]*) [^\s]*$", r"([^\s]*) [^\s]*$", r"[^\s]*$", r"[^\s]*$"]
 regex = [re.compile(pattern) for pattern in patterns]
@@ -28,7 +30,7 @@ err_identifiers = ["dec. per assignm.:",
                    "backtracks:"]                
 
 
-def getValuesFromLogAndOutFile(filename):
+def getValuesFromLogAndOutFile(filename, general=False):
     """
     Parses the Instance name, Running time, Space and Result
     from a log file.
@@ -38,8 +40,8 @@ def getValuesFromLogAndOutFile(filename):
     """
     
     global regex, group, log_identifiers
-    values = ["Name", "Time", "Space", "Result", "Status"] + ["NA"] * (len(out_identifiers) + len(err_identifiers))
-    values[0] = filename[filename.rfind("/")+1:-4]
+    log_values = ["Name", "Time", "Space", "Result", "Status"]
+    log_values[0] = filename[filename.rfind("/")+1:-4]
     
     with open(filename) as f:
         for s in f:
@@ -49,30 +51,36 @@ def getValuesFromLogAndOutFile(filename):
                 if log_identifiers[i] in s:
                     match = regex[i].search(s)
                     if match:
-                        values[i] = match.group(group[i])
+                        log_values[i] = match.group(group[i])
                     break
     
-    if values[4] == "ok" and values[3] not in ["10","20"]:
-        values[4] = "time"
+    if log_values[4] == "ok" and log_values[3] not in ["10","20"]:
+        log_values[4] = "time"
 
+    if general:
+        return log_values
+
+    out_values = ["NA"] * len(out_identifiers)
     filename = filename[:-3] + "out"
     if os.path.isfile(filename):
         with open(filename) as f:
             for s in f:
                 for i,v in enumerate(out_identifiers):
                     if s.startswith(v):
-                        values[len(log_identifiers)+i] = s[len(v):].strip()
+                        out_values[i] = s[len(v):].strip()
                         break
     
+    err_values = ["NA"] * len(err_identifiers)
     filename = filename[:-3] + "err"
     if os.path.isfile(filename):
         with open(filename) as f:
             for s in f:
                 for i,v in enumerate(err_identifiers):
                     if s.startswith(v):
-                        values[len(log_identifiers)+len(out_identifiers)+i] = s[len(v):].strip()
+                        err_values[i] = s[len(v):].strip()
                         break
-    return values
+
+    return log_values + out_values + err_values
 
 root_filter_pattern = r"[^/]*$"
 root_filter_regex = re.compile(root_filter_pattern)
@@ -121,17 +129,36 @@ def writeCSV(out_file, result_table):
         for entry in result_table:
             print(*entry, sep=",", file=f)
     return None
+
+def parseDirName(results_dir):
+    results_dir = results_dir.rstrip("/")
+    results_dir = results_dir[results_dir.rfind("/") + 1:]
+    if results_dir.startswith("results_"):
+        results_dir = results_dir[8:]
+
+    idx = results_dir.rfind("_")
+    if idx == -1:
+        return results_dir + ".csv"
+    else:
+        return results_dir[idx+1:] + "_" + results_dir[:idx] + ".csv"
             
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        print("USAGE: parseresults.py <in_dir> <out_file>")
-        sys.exit(1)
-    in_dir = sys.argv[1]
-    out_file = sys.argv[2]
-    num_proc = multiprocessing.cpu_count()
+    parser = ArgumentParser()
+    parser.add_argument("results_dir", help="Directory containing (possibly in deeper subdirectories) all .log, .out, and .err files.")
+    parser.add_argument("-o", "--outfile", type=str, default=None, help="Specify output file. The default is to guess <inst_set> and <config> and write to <config>_<inst_set>.csv.")
+    parser.add_argument("-g", "--general", action="store_true", default=False, help="Do not parse auxiliary information from .out and .log files.")
+    args = parser.parse_args()
+
+    in_dir = args.results_dir
+    out_file = args.outfile
+    if out_file == None:
+        out_file = parseDirName(args.results_dir)
 
     file_list = getFileList(in_dir)
-    sliced_file_lists = [file_list[r::num_proc] for r in range(num_proc)]
+    writeCSV(out_file, sorted(getResultsFromFileList(file_list), key=itemgetter(0)))
 
-    with multiprocessing.Pool(num_proc) as p:
-        writeCSV(out_file, [elem for table in p.map(getResultsFromFileList, sliced_file_lists) for elem in table])
+    #num_proc = multiprocessing.cpu_count()
+    #sliced_file_lists = [file_list[r::num_proc] for r in range(num_proc)]
+
+    #with multiprocessing.Pool(num_proc) as p:
+    #    writeCSV(out_file, [elem for table in p.map(getResultsFromFileList, sliced_file_lists) for elem in table])
