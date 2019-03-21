@@ -118,7 +118,7 @@ def getResultsFromFileList(file_list):
     config = in_dir[-3:]
     idx = in_dir.rfind("_")
     if idx != -1:
-        config = in_dir[idx+1:]
+        config = in_dir[idx+1:].rstrip("/")
     
     result_table = [getValuesFromLogAndOutFile(os.path.join(root, logfile)) + [classname, config] for root, classname, logfile in file_list]
     return result_table
