@@ -22,22 +22,24 @@ def printStats(classes, configurations, instances, rundata, timeout):
     for j, config in enumerate(configurations):
         par10 = 0
         total = 0
-        stats[True] = stats[False] = stats["time"] = stats["memory"] = stats["fault"] = stats["signal(9)"] = 0
+        stats[True] = stats[False] = stats["ok"] = stats["time"] = stats["memory"] = stats["fault"] = stats["signal(9)"] = 0
         for classname in classes:
             for instance in instances[classname]:
                 total += 1
                 ans, time, status = rundata[getUID(config, classname, instance)]
+                stats[status] += 1
                 if ans != None:
                     stats[ans] += 1
                     par10 += time
                 else:
                     par10 += timeout*10
-                    stats[status] += 1
+        if stats["ok"] != stats[True] + stats[False]:
+            print("WARNING: not all 'ok' instances have an answer!")
         print("####################" + "#" * 15 + "##")
         print("# Configuration:    %15s #" % config)
         print("####################" + "#" * 15 + "##")
         print("# Total instances:  %15d #" % total)
-        print("# Instances solved: %15d #" % (stats[True] + stats[False]))
+        print("# Instances solved: %15d #" % stats["ok"])
         print("# SAT:              %15d #" % stats[True])
         print("# UNSAT:            %15d #" % stats[False])
         print("# Timeouts:         %15d #" % stats["time"])
