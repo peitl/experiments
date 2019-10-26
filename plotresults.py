@@ -22,22 +22,24 @@ def printStats(classes, configurations, instances, rundata, timeout):
     for j, config in enumerate(configurations):
         par10 = 0
         total = 0
-        stats[True] = stats[False] = stats["time"] = stats["memory"] = stats["fault"] = stats["signal(9)"] = 0
+        stats[True] = stats[False] = stats["ok"] = stats["time"] = stats["memory"] = stats["fault"] = stats["signal(9)"] = 0
         for classname in classes:
             for instance in instances[classname]:
                 total += 1
                 ans, time, status = rundata[getUID(config, classname, instance)]
+                stats[status] += 1
                 if ans != None:
                     stats[ans] += 1
                     par10 += time
                 else:
                     par10 += timeout*10
-                    stats[status] += 1
+        if stats["ok"] != stats[True] + stats[False]:
+            print("WARNING: not all 'ok' instances have an answer!")
         print("####################" + "#" * 15 + "##")
         print("# Configuration:    %15s #" % config)
         print("####################" + "#" * 15 + "##")
         print("# Total instances:  %15d #" % total)
-        print("# Instances solved: %15d #" % (stats[True] + stats[False]))
+        print("# Instances solved: %15d #" % stats["ok"])
         print("# SAT:              %15d #" % stats[True])
         print("# UNSAT:            %15d #" % stats[False])
         print("# Timeouts:         %15d #" % stats["time"])
@@ -187,6 +189,22 @@ def bestTimeout(classes, configurations, instances, rundata, timeout):
     mp.axis([0, timeout + 1, min((min(differences[i]) for i in range(2))), max(max_rel_diff) + 1])
     mp.show()
 
+def solvedMatrix(classes, configurations, instances, rundata):
+    easy_set = set(getEasy(classes, configurations, instances, rundata))
+    print("instance," + ",".join(configurations))
+    for classname in classes:
+        for instance in instances[classname]:
+            if classname + "/" + instance not in easy_set:
+                print(instance + "," + ",".join("1" if rundata[getUID(config, classname, instance)][0] != None else "0" for config in configurations))
+
+def timeMatrix(classes, configurations, instances, rundata):
+    easy_set = set(getEasy(classes, configurations, instances, rundata))
+    print("instance," + ",".join(configurations))
+    for classname in classes:
+        for instance in instances[classname]:
+            if classname + "/" + instance not in easy_set:
+                print(instance + "," + ",".join(str(rundata[getUID(config, classname, instance)][1]) for config in configurations))
+
 
 
 def getUID(config, classname, instance):
@@ -259,8 +277,10 @@ def init(filename, aggregate):
             # for logscale
             time = max(time, 0.001)
 
-            if answer == None or status != "ok":
-                time = timeout
+            # do not adjust time for unsolved instances
+            # time can still be useful
+            #if answer == None or status != "ok":
+            #    time = timeout
             instances[classname].add(instance)
             uid = getUID(config, classname, instance)
             if uid in rundata:
@@ -334,6 +354,8 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--easy", type=int, default=0, help="Identify instances solved by all solvers within the given time limit.")
     parser.add_argument("-g", "--aggregate", action="store_true", default=False, help="Treat all classes as one.")
     parser.add_argument("-f", "--families", action="store_true", default=False, help="Find families with large differences between solvers.")
+    parser.add_argument("-m", "--matrix-solved", action="store_true", default=False, help="Print a CSV-style binary matrix where a_{ij} = 1 if solver j solved instance i, and 0 otherwise.")
+    parser.add_argument("-M", "--matrix-time", action="store_true", default=False, help="Print a CSV-style binary matrix where t_{ij} = time solver j took on instance i.")
     parser.add_argument("-o", "--outliers", action="store_true", default=False, help="Find instances with large differences between solvers.")
     parser.add_argument("-s", "--stats", action="store_true", default=False, help="Display statistics about the results.")
     parser.add_argument("-t", "--timeout", type=int, default=0, help="Specify the cutoff time that was used for these runs.")
@@ -354,6 +376,10 @@ if __name__ == "__main__":
     
     if args.stats:
         printStats(classes, configurations, instances, rundata, timeout)
+    elif args.matrix_solved:
+        solvedMatrix(classes, configurations, instances, rundata)
+    elif args.matrix_time:
+        timeMatrix(classes, configurations, instances, rundata)
     elif args.families:
         analyzeFamilies(classes, configurations, instances, rundata)
     elif args.outliers:
