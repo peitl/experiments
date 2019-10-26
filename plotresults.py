@@ -114,6 +114,8 @@ def scatterPlot(classes, configurations, instances, rundata, timeout):
         for instance in instances[classname]:
             for i, config in enumerate(configurations):
                 instance_times[i].append(rundata[getUID(config, classname, instance)][1])
+    mp.rc("font", family="serif", serif=["Computer Modern"])
+    mp.rc("text", usetex=True)
     mp.scatter(*instance_times)
     mp.plot([0, timeout*10], [0, timeout*10])
     l, u = min(min(instance_times)) / 5, max(max(instance_times)) * 5
